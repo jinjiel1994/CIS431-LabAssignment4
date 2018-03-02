@@ -4,18 +4,18 @@
 
 Calculate heat distribution, optimizing by OpenMPI.
 
-For serial one with one processor (heat_equation_solver_1p.cpp), the compling and running command line is:
-
-~~~
-   g++ -std=c++11 -o heat_equation_solver_1p heat_equation_solver_1p.cpp
-   ./heat_equation_solver_1p
-~~~
-
 For OpenMPI with 4 processors and threshold(mpi_heat_equation_solver_with_threshold.cpp), the compling and running command line is:
 
 ~~~
    mpic++ -std=c++11 -o mpi_heat_equation_solver_with_threshold mpi_heat_equation_solver_with_threshold.cpp 
    mpirun --hostfile hostfile -np 4 mpi_heat_equation_solver_with_threshold
+~~~
+
+For serial one with 1 processor (heat_equation_solver_1p.cpp), the compling and running command line is:
+
+~~~
+   g++ -std=c++11 -o heat_equation_solver_1p heat_equation_solver_1p.cpp
+   ./heat_equation_solver_1p
 ~~~
 
 For OpenMPI with 4 processors and 1000 iterations(mpi_heat_equation_solver_4p.cpp), the compling and running command line is:
