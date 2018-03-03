@@ -79,12 +79,10 @@ int heat_equation_cal(int n, int argc, char *argv[]){
 
   // Iterate 1000 times;
   for (int t = 0; t < 1000; t++) { 
-
     /* Master does its part of the work */
     if (taskid == MASTER){
 
       /* Send each task its portion of the array - master keeps 1st part */
-
       for (int processor = 1; processor <=3; processor++)
       {
         if (processor == 1)
@@ -108,7 +106,6 @@ int heat_equation_cal(int n, int argc, char *argv[]){
           MPI_Send(&output_temp[i][col], chunksize + 2, MPI_DOUBLE, processor, tag4, MPI_COMM_WORLD);
         } 
       }
-
       row = 0;
       col = 0;
       // Calculation
@@ -120,7 +117,6 @@ int heat_equation_cal(int n, int argc, char *argv[]){
       swap(input_temp, output_temp);
 
       /* Wait to receive results from each task */
-
       for (int processor = 1; processor <=3; processor++)
       {
         MPI_Recv(&row, 1, MPI_INT, processor, tag1, MPI_COMM_WORLD, &status);
@@ -144,11 +140,9 @@ int heat_equation_cal(int n, int argc, char *argv[]){
       for (i = row; i <= chunksize + 1; i++ )
       {
         
-        MPI_Recv(&output_temp[i][col], chunksize + 2, MPI_DOUBLE, source, tag4, MPI_COMM_WORLD, &status);
         MPI_Recv(&input_temp[i][col], chunksize + 2, MPI_DOUBLE, source, tag3, MPI_COMM_WORLD, &status);
+        MPI_Recv(&output_temp[i][col], chunksize + 2, MPI_DOUBLE, source, tag4, MPI_COMM_WORLD, &status);
       } 
-      
-
       // Calculation
       for (i = row + 1; i < row + chunksize + 1; ++ i ) {
         for (j = col + 1; j < col + chunksize + 1; ++ j) {
@@ -156,7 +150,6 @@ int heat_equation_cal(int n, int argc, char *argv[]){
         }
       }
       swap(input_temp, output_temp);
-
       task = MASTER;
       MPI_Send(&row, 1, MPI_INT, task, tag1, MPI_COMM_WORLD);
       MPI_Send(&col, 1, MPI_INT, task, tag2, MPI_COMM_WORLD);
@@ -166,7 +159,6 @@ int heat_equation_cal(int n, int argc, char *argv[]){
         MPI_Send(&input_temp[i][col+1], chunksize, MPI_DOUBLE, task, tag3, MPI_COMM_WORLD);
         MPI_Send(&output_temp[i][col+1], chunksize, MPI_DOUBLE, task, tag4, MPI_COMM_WORLD);
       } 
-
     } /* end of non-master */
 
   } /* end of iteration */
@@ -191,7 +183,7 @@ int main(int argc, char *argv[]){
   MPI_Init(&argc, &argv);
   heat_equation_cal(100, argc, argv);
   heat_equation_cal(1000, argc, argv);
-  heat_equation_cal(5000, argc, argv);
+  heat_equation_cal(5000, argc, argv);  
   MPI_Finalize(); 
 
 	return 0;
