@@ -233,7 +233,6 @@ int heat_equation_cal(int n, int argc, char *argv[]){
   delete [] input_temp;
   delete [] output_temp;
 
-
   return 0; 
 }
 
