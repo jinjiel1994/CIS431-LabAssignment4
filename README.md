@@ -37,12 +37,12 @@ I've tested the output, listed below: （unit = second)
 ~~~
         p = 1   p = 4   p = 9   
         
-n=100   0.09    0.17    1.06     
+n=100   0.09    0.17    23.45   
 
-n=1000  10.13   7.48   88.38  
+n=1000  10.13   7.48   134.23 
 
-n=5000  226.97  126.43  6922.5 
+n=5000  226.97  126.43  684.23
 
 ~~~
 
-I cannot run 1e5*1e5 in my Mac because the magnitude is too large to compute. However, from the gragh listed above, we can see when the magnitude is not quite large, optimization is not significant, while if the magnitude is large enough, multiple threads can run much faster.
+As the data shown above, when n is small(only 100), the cost of data movement outweighs the advantage of parallel(p=4), so serial one won the game. However, as the n gets larger and larger, the speed of openMPI(p=4) is getting faster and faster than serial one. One interesting point is that if p=9, the performance is even much worse than any others. One reason for supporting this evidence is that my Mac doesn't have enough saperate processors to make the parallel work well.
