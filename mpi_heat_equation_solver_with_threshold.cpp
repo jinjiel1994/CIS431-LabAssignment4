@@ -1,5 +1,5 @@
 
-// mpic++ -std=c++11 -o mpi_heat_equation_solver_with_threshold mpi_heat_equation_solver_with_threshold.cpp 
+// mpic++ -std=c++11 -o mpi_heat_equation_solver_with_threshold1 mpi_heat_equation_solver_with_threshold.cpp 
 // mpirun --hostfile hostfile -np 4 mpi_heat_equation_solver_with_threshold
 
 
@@ -17,9 +17,9 @@ typedef std::chrono::high_resolution_clock Clock;
 int heat_equation_cal(int n, int argc, char *argv[]){
 
   double sum_diff, diff, old_value;
-  int numtasks, taskid, task, chunksize, tag1, tag2, tag3, tag4, i, j, row, col, source;
-  int flag = 0;
+  int numtasks, taskid, task, chunksize, tag1, tag2, tag3, tag4, tag5, tag6, i, j, row, col, source;
   double threshold =  0.001;
+  int flag = 0;
 
   // Declare input and output array
   double** input_temp = (double **) malloc((n+2) * sizeof(double*));
@@ -60,7 +60,7 @@ int heat_equation_cal(int n, int argc, char *argv[]){
   MPI_Status status;
 
   if (numtasks != 4) {
-    printf("Quitting. Number of MPI tasks must be 3.\n");
+    printf("Quitting. Number of MPI tasks must be 4.\n");
     MPI_Abort(MPI_COMM_WORLD, 0);
     exit(0);
    }
@@ -74,45 +74,60 @@ int heat_equation_cal(int n, int argc, char *argv[]){
   tag2 = 2;
   tag3 = 3;
   tag4 = 4;
-
-  /***** Master task only ******/
-
+  tag5 = 5;
+  tag6 = 6;
+ 
   auto t1 = Clock::now();  
+
+  /* Send each task its index of the array - master keeps 1st part */
+  if (taskid == MASTER)
+  {
+    for (int processor = 1; processor <=3; processor++)
+    {
+      if (processor == 1)
+      {
+        row = 0;
+        col = chunksize;
+      }else if (processor == 2)
+      {
+        row = chunksize;
+        col = 0;
+      }else if (processor == 3)
+      {
+        row = chunksize;
+        col = chunksize;
+      }
+      MPI_Send(&row, 1, MPI_INT, processor, tag1, MPI_COMM_WORLD);
+      MPI_Send(&col, 1, MPI_INT, processor, tag2, MPI_COMM_WORLD);
+    }
+  }else /* Receive the index each processor is going to run */
+  {
+    source = MASTER;
+    MPI_Recv(&row, 1, MPI_INT, source, tag1, MPI_COMM_WORLD, &status);
+    MPI_Recv(&col, 1, MPI_INT, source, tag2, MPI_COMM_WORLD, &status);
+  }
+
 
   // Iterate till converge
   while(1) { 
-
     diff = 0;
     sum_diff = 0;
     /* Master does its part of the work */
     if (taskid == MASTER){
 
-      /* Send each task its portion of the array - master keeps 1st part */
-
+      /* Send each task ghost of the array - master keeps 1st part */
       for (int processor = 1; processor <=3; processor++)
       {
-        if (processor == 1)
+        MPI_Recv(&row, 1, MPI_INT, processor, tag1, MPI_COMM_WORLD, &status);
+        MPI_Recv(&col, 1, MPI_INT, processor, tag2, MPI_COMM_WORLD, &status);
+        MPI_Send(&input_temp[row][col], chunksize + 2, MPI_DOUBLE, processor, tag3, MPI_COMM_WORLD); 
+        for (i = row + 1; i <= row + chunksize ; i++ )
         {
-          row = 0;
-          col = chunksize;
-        }else if (processor == 2)
-        {
-          row = chunksize;
-          col = 0;
-        }else if (processor == 3)
-        {
-          row = chunksize;
-          col = chunksize;
-        }
-        MPI_Send(&row, 1, MPI_INT, processor, tag1, MPI_COMM_WORLD);
-        MPI_Send(&col, 1, MPI_INT, processor, tag2, MPI_COMM_WORLD);
-        for (i = row; i <= chunksize + 1; i++ )
-        {
-          MPI_Send(&input_temp[i][col], chunksize + 2, MPI_DOUBLE, processor, tag3, MPI_COMM_WORLD);        
-          MPI_Send(&output_temp[i][col], chunksize + 2, MPI_DOUBLE, processor, tag4, MPI_COMM_WORLD);
+          MPI_Send(&input_temp[i][col], 1, MPI_DOUBLE, processor, tag4, MPI_COMM_WORLD);   
+          MPI_Send(&input_temp[i][col+chunksize + 1], 1, MPI_DOUBLE, processor, tag5, MPI_COMM_WORLD);           
         } 
+        MPI_Send(&input_temp[row + chunksize + 1][col], chunksize + 2, MPI_DOUBLE, processor, tag6, MPI_COMM_WORLD); 
       }
-
       row = 0;
       col = 0;
       // Calculation
@@ -125,17 +140,19 @@ int heat_equation_cal(int n, int argc, char *argv[]){
       }
       swap(input_temp, output_temp);
 
-      /* Wait to receive results from each task */
-
+      /* Wait to receive ghost cells from each task */
       for (int processor = 1; processor <=3; processor++)
       {
         MPI_Recv(&row, 1, MPI_INT, processor, tag1, MPI_COMM_WORLD, &status);
         MPI_Recv(&col, 1, MPI_INT, processor, tag2, MPI_COMM_WORLD, &status);
-        for (i = row + 1 ; i < row + chunksize + 1; i++ )
+
+        MPI_Recv(&input_temp[row+1][col+1], chunksize, MPI_DOUBLE, processor, tag3, MPI_COMM_WORLD, &status);
+        for (i = row + 2 ; i < row + chunksize; i++ )
         { 
-          MPI_Recv(&input_temp[i][col+1], chunksize, MPI_DOUBLE, processor, tag3, MPI_COMM_WORLD, &status);
-          MPI_Recv(&output_temp[i][col+1], chunksize, MPI_DOUBLE, processor, tag4, MPI_COMM_WORLD, &status);    
+          MPI_Recv(&input_temp[i][col+1], 1, MPI_DOUBLE, processor, tag4, MPI_COMM_WORLD, &status);
+          MPI_Recv(&input_temp[i][col+chunksize], 1, MPI_DOUBLE, processor, tag5, MPI_COMM_WORLD, &status);
         } 
+        MPI_Recv(&input_temp[row+ chunksize][col+1], chunksize, MPI_DOUBLE, processor, tag6, MPI_COMM_WORLD, &status);
       }
       // store the sum of differniation number in sum_diff
       MPI_Reduce(&diff, &sum_diff, 1, MPI_DOUBLE, MPI_SUM, MASTER, MPI_COMM_WORLD);
@@ -150,17 +167,17 @@ int heat_equation_cal(int n, int argc, char *argv[]){
     /***** Non-master tasks only *****/
     if (taskid > MASTER){
 
-      /* Receive my portion of array from the master task */
-      source = MASTER;
-      MPI_Recv(&row, 1, MPI_INT, source, tag1, MPI_COMM_WORLD, &status);
-      MPI_Recv(&col, 1, MPI_INT, source, tag2, MPI_COMM_WORLD, &status);
-      for (i = row; i <= chunksize + 1; i++ )
-      {
-        
-        MPI_Recv(&output_temp[i][col], chunksize + 2, MPI_DOUBLE, source, tag4, MPI_COMM_WORLD, &status);
-        MPI_Recv(&input_temp[i][col], chunksize + 2, MPI_DOUBLE, source, tag3, MPI_COMM_WORLD, &status);
+      /* Receive the ghost cells of array from the master task */
+      task = MASTER;
+      MPI_Send(&row, 1, MPI_INT, task, tag1, MPI_COMM_WORLD);
+      MPI_Send(&col, 1, MPI_INT, task, tag2, MPI_COMM_WORLD);
+      MPI_Recv(&input_temp[row][col], chunksize + 2, MPI_DOUBLE, source, tag3, MPI_COMM_WORLD, &status);
+      for (i = row + 1; i <= row + chunksize; i++ )
+      {          
+        MPI_Recv(&input_temp[i][col], 1, MPI_DOUBLE, source, tag4, MPI_COMM_WORLD, &status);
+        MPI_Recv(&input_temp[i][col+chunksize + 1], 1, MPI_DOUBLE, source, tag5, MPI_COMM_WORLD, &status);
       } 
-      
+      MPI_Recv(&input_temp[row + chunksize +1][col], chunksize + 2, MPI_DOUBLE, source, tag6, MPI_COMM_WORLD, &status);
 
       // Calculation
       for (i = row + 1; i < row + chunksize + 1; ++ i ) {
@@ -174,17 +191,18 @@ int heat_equation_cal(int n, int argc, char *argv[]){
 
       task = MASTER;
       MPI_Send(&row, 1, MPI_INT, task, tag1, MPI_COMM_WORLD);
-      MPI_Send(&col, 1, MPI_INT, task, tag2, MPI_COMM_WORLD);
-      for (i = row + 1; i < row + chunksize + 1; i++ )
+      MPI_Send(&col, 1, MPI_INT, task, tag2, MPI_COMM_WORLD); 
+      MPI_Send(&input_temp[row+1][col+1], chunksize, MPI_DOUBLE, task, tag3, MPI_COMM_WORLD);
+      for (i = row + 2; i < row + chunksize; i++ )
       {
         
-        MPI_Send(&input_temp[i][col+1], chunksize, MPI_DOUBLE, task, tag3, MPI_COMM_WORLD);
-        MPI_Send(&output_temp[i][col+1], chunksize, MPI_DOUBLE, task, tag4, MPI_COMM_WORLD);
+        MPI_Send(&input_temp[i][col+1], 1, MPI_DOUBLE, task, tag4, MPI_COMM_WORLD);
+        MPI_Send(&input_temp[i][col+chunksize], 1, MPI_DOUBLE, task, tag5, MPI_COMM_WORLD);
       } 
+      MPI_Send(&input_temp[row + chunksize ][col+1], chunksize, MPI_DOUBLE, task, tag6, MPI_COMM_WORLD);
 
       // store the sum of differniation number in sum_diff
       MPI_Reduce(&diff, &sum_diff, 1, MPI_DOUBLE, MPI_SUM, MASTER, MPI_COMM_WORLD);
-
     } /* end of non-master */
 
     // broadcast the results to all MPI Ranks
@@ -196,8 +214,36 @@ int heat_equation_cal(int n, int argc, char *argv[]){
     }
 
   } /* end of iteration */
-  auto t2 = Clock::now();
 
+  // Return all the calculated grid back to master
+  if (taskid == MASTER)
+  {
+    for (int processor = 1; processor <=3; processor++)
+    {
+      MPI_Recv(&row, 1, MPI_INT, processor, tag1, MPI_COMM_WORLD, &status);
+      MPI_Recv(&col, 1, MPI_INT, processor, tag2, MPI_COMM_WORLD, &status);
+      for (i = row + 1 ; i < row + chunksize + 1; i++ )
+      { 
+        MPI_Recv(&input_temp[i][col+1], chunksize, MPI_DOUBLE, processor, tag3, MPI_COMM_WORLD, &status);
+        MPI_Recv(&output_temp[i][col+1], chunksize, MPI_DOUBLE, processor, tag4, MPI_COMM_WORLD, &status);    
+      } 
+    }
+    swap(input_temp, output_temp);
+  }else /* Receive the index each processor is going to run */
+  {
+    task = MASTER;
+    MPI_Send(&row, 1, MPI_INT, task, tag1, MPI_COMM_WORLD);
+    MPI_Send(&col, 1, MPI_INT, task, tag2, MPI_COMM_WORLD);
+    for (i = row + 1; i < row + chunksize + 1; i++ )
+    {  
+      MPI_Send(&input_temp[i][col+1], chunksize, MPI_DOUBLE, task, tag3, MPI_COMM_WORLD);
+      MPI_Send(&output_temp[i][col+1], chunksize, MPI_DOUBLE, task, tag4, MPI_COMM_WORLD);
+    } 
+    
+  }
+
+
+  auto t2 = Clock::now();
 
   // Print the time
   if (taskid == MASTER){
@@ -208,6 +254,11 @@ int heat_equation_cal(int n, int argc, char *argv[]){
         << " seconds" << std::endl;
   }
 
+  delete [] in;
+  delete [] out ;
+  delete [] input_temp;
+  delete [] output_temp;
+
 
   return 0; 
 }
@@ -216,6 +267,8 @@ int main(int argc, char *argv[]){
 
   MPI_Init(&argc, &argv);
   heat_equation_cal(100, argc, argv);
+  //heat_equation_cal(1000, argc, argv);
+  //heat_equation_cal(5000, argc, argv);  
   MPI_Finalize(); 
 
 	return 0;
